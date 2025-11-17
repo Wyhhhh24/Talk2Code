@@ -1,12 +1,10 @@
 package com.air.aicodemaster.core;
-
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.air.aicodemaster.ai.model.HtmlCodeResult;
 import com.air.aicodemaster.ai.model.MultiFileCodeResult;
 import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
-
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 
@@ -21,9 +19,9 @@ public class CodeFileSaver {
      * 保存 HtmlCodeResult
      */
     public static File saveHtmlCodeResult(HtmlCodeResult result) {
-        // 创建唯一的文件目录路径
+        // 创建唯一的文件存放目录路径
         String baseDirPath = buildUniqueDir(CodeGenTypeEnum.HTML.getValue());
-        // 将内容写入到对应文件中并保存到指定目录下
+        // 将 AI 生成的内容写入到对应文件中并保存到指定目录下
         writeToFile(baseDirPath, "index.html", result.getHtmlCode());
         // 返回文件路径
         return new File(baseDirPath);
@@ -44,7 +42,18 @@ public class CodeFileSaver {
     }
 
     /**
-     * 构建唯一的文件目录路径：tmp/code_output/bizType_雪花ID
+     * 写入单个文件
+     */
+    private static void writeToFile(String dirPath, String filename, String content) {
+        // 创建文件路径
+        String filePath = dirPath + File.separator + filename;
+        // 将内容写入文件中      内容     文件路径     编码格式
+        FileUtil.writeString(content, filePath, StandardCharsets.UTF_8);
+    }
+
+
+    /**
+     * 构建唯一的文件存放的目录路径：tmp/code_output/bizType_雪花ID
      * 每次生成都对应一个临时目录下的文件夹，使用 业务类型 + 雪花 ID 的命名方式来确保唯一性
      */
     private static String buildUniqueDir(String bizType) {
@@ -56,15 +65,5 @@ public class CodeFileSaver {
         FileUtil.mkdir(dirPath);
         // 返回文件夹路径
         return dirPath;
-    }
-
-    /**
-     * 写入单个文件
-     */
-    private static void writeToFile(String dirPath, String filename, String content) {
-        // 创建文件路径
-        String filePath = dirPath + File.separator + filename;
-        // 将内容写入文件中
-        FileUtil.writeString(content, filePath, StandardCharsets.UTF_8);
     }
 }
