@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * 文件写入工具类
  */
+@Deprecated
 public class CodeFileSaver {
     // 文件保存根目录，在临时目录 tmp 下保存文件，每次生成都对应一个临时目录下的文件夹
     private static final String FILE_SAVE_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";

@@ -44,6 +44,8 @@ public class AiCodeGeneratorFacade {
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(userMessage);
+                // 获得响应结果，直接传给代码文件保存执行器
+                // 如果希望直接将这个返回值直接给最外层去返回，需要用到一个语法 yield 越过，这样就能把内层的返回值直接作为外层 switch 的返回结果
                 yield CodeFileSaverExecutor.executeSaver(result, CodeGenTypeEnum.HTML);
             }
             case MULTI_FILE -> {
@@ -71,7 +73,10 @@ public class AiCodeGeneratorFacade {
         }
         return switch (codeGenTypeEnum) {
             case HTML -> {
+                // 获取响应流，调用所封装的通用方法，解析响应结果，保存响应文件
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
+                // processCodeStream 通用方法就是对 generateAndSaveHtmlCodeStream 和 generateAndSaveMultiFileCodeStream
+                // 这两个具有相同的流程，进行封装
                 yield processCodeStream(codeStream, CodeGenTypeEnum.HTML);
             }
             case MULTI_FILE -> {
@@ -101,10 +106,11 @@ public class AiCodeGeneratorFacade {
             // 流式返回完成后保存代码
             try {
                 String completeCode = codeBuilder.toString();
-                // 使用执行器解析代码
+                // 使用代码解析执行器解析代码，因为有两种生成模式，所以解析响应结果，返回值是 Object 类型
                 Object parsedResult = CodeParserExecutor.executeParser(completeCode, codeGenType);
-                // 使用执行器保存代码
+                // 代码文件保存执行器，保存代码
                 File savedDir = CodeFileSaverExecutor.executeSaver(parsedResult, codeGenType);
+                // 这代码文件保存执行器所需的参数正好是代码解析执行器的返回值，这两个执行器也就实现了链式调用
                 log.info("保存成功，路径为：" + savedDir.getAbsolutePath());
             } catch (Exception e) {
                 log.error("保存失败: {}", e.getMessage());
