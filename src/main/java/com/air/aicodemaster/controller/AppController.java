@@ -12,10 +12,7 @@ import com.air.aicodemaster.constant.UserConstant;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
 import com.air.aicodemaster.exception.ThrowUtils;
-import com.air.aicodemaster.model.dto.app.AppAddRequest;
-import com.air.aicodemaster.model.dto.app.AppAdminUpdateRequest;
-import com.air.aicodemaster.model.dto.app.AppQueryRequest;
-import com.air.aicodemaster.model.dto.app.AppUpdateRequest;
+import com.air.aicodemaster.model.dto.app.*;
 import com.air.aicodemaster.model.entity.App;
 import com.air.aicodemaster.model.entity.User;
 import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
@@ -117,6 +114,27 @@ public class AppController {
         // 也不需要专门在后端进行转义了，其实如果想把后端空格也正常输出还有一种方式是：后端先对空格进行转义，前端再转回来
         // 比如把空格转成大括号+小括号+中括号，然后前端再转回来，这种方式还不如再粉装一层
     }
+
+
+    /**
+     * 应用部署
+     *
+     * @param appDeployRequest 部署请求
+     * @param request          请求
+     * @return 部署 URL
+     */
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = appDeployRequest.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 调用服务部署应用
+        String deployUrl = appService.deployApp(appId, loginUser);
+        return ResultUtils.success(deployUrl);
+    }
+
 
 
 
@@ -377,7 +395,4 @@ public class AppController {
         // 获取封装类
         return ResultUtils.success(appService.getAppVO(app));
     }
-
-
-
 }
