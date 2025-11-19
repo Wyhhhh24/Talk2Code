@@ -1,10 +1,12 @@
 package com.air.aicodemaster.service;
 
 import com.air.aicodemaster.model.dto.app.AppQueryRequest;
+import com.air.aicodemaster.model.entity.App;
+import com.air.aicodemaster.model.entity.User;
 import com.air.aicodemaster.model.vo.AppVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
-import com.air.aicodemaster.model.entity.App;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -36,4 +38,12 @@ public interface AppService extends IService<App> {
      * 一次性组装所有 AppVO，根据 userId 从 Map 中取到需要的用户信息
      */
     List<AppVO> getAppVOList(List<App> appList);
+
+    /**
+     * 通过对话生成代码
+     * @param appId 应用 id
+     * @param message 提示词
+     * @param loginUser 登录用户
+     */
+    Flux<String> chatToGenCode(Long appId, String message, User loginUser);
 }

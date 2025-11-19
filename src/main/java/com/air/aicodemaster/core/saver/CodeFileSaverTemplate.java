@@ -1,10 +1,11 @@
 package com.air.aicodemaster.core.saver;
+
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
 import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 
@@ -30,11 +31,11 @@ public abstract class CodeFileSaverTemplate<T> {
      * 模板方法最核心的流程就是定义一个流程，然后子类都要遵循这个流程
      * 这个方法最好加一个 final ，不要让它被子类复写，因为流程是不能被子类去重写的，这也是模板方法的一个特点
      */
-    public final File saveCode(T result){
+    public final File saveCode(T result , Long appId){
         // 1. 验证输入
         validateInput(result);
         // 2. 构建唯一目录
-        String baseDirPath = buildUniqueDir();
+        String baseDirPath = buildUniqueDir(appId);
         // 3. 保存文件（具体实现由子类提供）
         saveFiles(result, baseDirPath);
         // 4. 返回目录文件对象
@@ -56,11 +57,15 @@ public abstract class CodeFileSaverTemplate<T> {
     /**
      * 构建唯一目录路径
      *
+     * @param appId 应用ID
      * @return 目录路径
      */
-    protected final String buildUniqueDir() {
+    protected final String buildUniqueDir(Long appId) {
+        if(appId == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "appId 不能为空");
+        }
         String codeType = getCodeType().getValue();
-        String uniqueDirName = StrUtil.format("{}_{}", codeType, IdUtil.getSnowflakeNextIdStr());
+        String uniqueDirName = StrUtil.format("{}_{}", codeType, appId);
         String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
         FileUtil.mkdir(dirPath);
         return dirPath;

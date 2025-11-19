@@ -2,6 +2,7 @@ package com.air.aicodemaster.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.air.aicodemaster.annotation.AuthCheck;
 import com.air.aicodemaster.common.BaseResponse;
 import com.air.aicodemaster.common.DeleteRequest;
@@ -25,10 +26,15 @@ import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用 控制层。
@@ -44,6 +50,75 @@ public class AppController {
 
     @Resource
     private AppService appService;
+
+
+
+    /**
+     * 应用聊天生成代码（流式 SSE）
+     * 需要通过 SSE 这种协议返回给前端，让前端能够接收我们后端处理的流式内容，而不是阻塞返回
+     * 如果要使用 SSE 这种流式对话方法，要给这个接口的响应做一个特殊的声明
+     *
+     * 这个接口建议用 GET 类型，如果说接口接收的参数不复杂没有超过 GET 请求限制那就用 GET
+     * 这样前端在用 EventSource 去对接后端 SSE 接口的时候，GET 请求会更便于对接，测试起来更方便
+     * @param appId   应用 ID
+     * @param message 用户消息
+     * @param request 请求对象
+     *                加一个返回的声明 MediaType.TEXT_EVENT_STREAM_VALUE
+     * @return 生成结果流
+     */
+    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
+                                      @RequestParam String message,
+                                      HttpServletRequest request) {
+        // 参数校验
+        // 如果有一个攻击者连续用 appId 小于 0 的值请求这个接口，是不是就刷数据库了
+        // 这里添加一个这个值的校验，其实查询数据库的话，很多字段都需要这样校验
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 调用服务生成代码（流式）
+        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+        // 为了解决流式输出时空格丢失问题，即将返回的这个流对象，可以再进行处理
+        // 解决方案是对这个流封装一层 JSON 格式，处理这个流，每一个流进行转换
+        // 比如说现在这个流返回的文本块，可以把每一个文本块封装成一个 JSON
+        return contentFlux
+                .map(chunk ->{
+                    // 构造一个对象，构造了有一个键值对的对象，
+                    // 把数据封装到了一个 Key 为 "d" 的 Map 里
+                    // 这里用 d 而不是用 data ，字符越多传输消耗的流量越大，这也是直接影响性能的
+                    // 有时候这个块就一个空格，如果用 data 的话，光一个键就已经比要返回的数值要长，损耗得不偿失
+                    // 尽量用短一点的字符
+                    Map<String, String> wrapper = Map.of("d", chunk);
+                    String jsonData = JSONUtil.toJsonStr(wrapper);
+                    // 转换成 JSON 之后，我们可以再封装一层，封装成一个 ServerSentEvent
+                    // 前端处理起来更方便一些
+                    return ServerSentEvent.<String>builder() // Spring 包下的 ServerSentEvent ，AI 输出的是 String，最后处理得到的流也是 String 类型的
+                            .data(jsonData)
+                            .build();
+                })
+                // 我们的前端有的时候没有办法判断什么时候 AI 生成完成了
+                // 在 SSE 中，当服务器关闭连接时，会触发客户端的 onclose 事件，这是前端判断流结束的一种方式
+                // 但是，onclose 事件会在连接正常结束，后端把 AI 内容都输出完了（服务器主动关闭）和异常中断（如网络问题）时都触发
+                // 前端就很难区分到底后端是正常响应了所有数据、还是异常中断了
+                // 因此，我们最好在后端所有事件返回完成后，添加一个明确的 done 事件
+                // 这样前端只要发现有 done 事件是不是就正常结束了，否则如果调用 onClose 是不是就异常中断了
+                // 这样可以更清晰地区分流的正常结束和异常中断
+                .concatWith(Mono.just(
+                        // 发送结束事件
+                        ServerSentEvent.<String>builder()
+                                .event("done")
+                                .data("")
+                                .build()
+                ));
+                // 这个流依次交给下游去处理，现在这个流到我这了，是不是可以给它加点东西，不仅能转换还可以加个事件
+                // 最后所有事件发送完了，我们再额外送它一个事件，这样前端就能通过这个 done 去判断了
+        // 解决了空格丢失问题，纯空格的 String 也能拿到了，data 多了一层封装，不会出现丢失内容的情况
+        // 也不需要专门在后端进行转义了，其实如果想把后端空格也正常输出还有一种方式是：后端先对空格进行转义，前端再转回来
+        // 比如把空格转成大括号+小括号+中括号，然后前端再转回来，这种方式还不如再粉装一层
+    }
+
+
 
     /**
      * 创建应用
@@ -66,7 +141,7 @@ public class AppController {
         app.setUserId(loginUser.getId());
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // 暂时设置为多文件生成
+        // TODO 暂时现在的所有代码生成设置为多文件生成
         app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
         // 插入数据库
         boolean result = appService.save(app);

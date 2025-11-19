@@ -18,13 +18,13 @@ class AiCodeGeneratorFacadeTest {
 
     @Test
     void generateAndSaveCode() {
-        File file = aiCodeGeneratorFacade.generateAndSaveCode("生成一个Wyhhhh的博客页面，总行数是30行", CodeGenTypeEnum.MULTI_FILE);
+        File file = aiCodeGeneratorFacade.generateAndSaveCode("生成一个Wyhhhh的博客页面，总行数是30行", CodeGenTypeEnum.MULTI_FILE, 1L);
         Assertions.assertNotNull(file);
     }
 
     @Test
     void generateAndSaveCodeStream() {
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("任务记录网站 总行数50行", CodeGenTypeEnum.MULTI_FILE);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("任务记录网站 总行数50行", CodeGenTypeEnum.MULTI_FILE, 1L);
         // 返回值是一个 Flux 对象，那我们怎么样等到 Flux 对象所有代码生成完成之后，单元测试再结束呢？
         // 阻塞等待所有数据收集完成
         List<String> result = codeStream.collectList().block();
