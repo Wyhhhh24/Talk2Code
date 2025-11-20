@@ -11,7 +11,7 @@ import java.util.Map;
 public class MybatisCodeGenerator {
 
     // 需要生成的表名
-    private static final String[] TABLE_NAMES = {"app"};
+    private static final String[] TABLE_NAMES = {"chat_history"};
 
     /**
      * 官方文档中的代码示例
