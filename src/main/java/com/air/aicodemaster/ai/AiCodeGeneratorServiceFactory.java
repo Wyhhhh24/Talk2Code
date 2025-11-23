@@ -1,9 +1,14 @@
 package com.air.aicodemaster.ai;
 
+import com.air.aicodemaster.ai.tools.FileWriteTool;
+import com.air.aicodemaster.exception.BusinessException;
+import com.air.aicodemaster.exception.ErrorCode;
+import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
 import com.air.aicodemaster.service.ChatHistoryService;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -29,10 +34,19 @@ public class AiCodeGeneratorServiceFactory {
     private ChatModel chatModel;
 
     /**
-     * 流式的 ChatModel
+     * 流式的 ChatModel ，根据配置文件框架自动注入的
+     * 但是这里的名称得要修改为对应的 Bean 的名称，因为我们现在自定义了一个思考模型的 Bean
+     * 两个 StreamingChatModel 的 Bean 的话会冲突，这里修改注入的 Bean 名称为具体的即可
+     * 否则框架不知道注入哪一个 Bean
      */
     @Resource
-    private StreamingChatModel streamingChatModel;
+    private StreamingChatModel openAiStreamingChatModel;
+
+    /**
+     * 思考模型
+     */
+    @Resource
+    private StreamingChatModel reasoningStreamingChatModel;
 
     /**
      * Redis 配置类
@@ -62,23 +76,32 @@ public class AiCodeGeneratorServiceFactory {
      * - 写入后 30 分钟过期
      * - 访问后 10 分钟过期
      */
-    private final Cache<Long, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
+    private final Cache<String, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
             .maximumSize(1000)  // 最多加 1000 个 Key
             .expireAfterWrite(Duration.ofMinutes(30)) // 设置 30 分钟过期，正常情况来说，一个用户和同一个 AI 应用对话的时间应该不会超过 30 分钟
             .expireAfterAccess(Duration.ofMinutes(10)) // 超过半小时之后，内存中的缓存也该淘汰了，在需要使用，重新生成即可
             .removalListener((key, value, cause) -> {
-                log.debug("AI 服务实例被移除，appId: {}, 原因: {}", key, cause);
+                log.debug("AI 服务实例被移除，缓存键: {}, 原因: {}", key, cause);
             }) // 当某一个 Key 被强行删除掉，比如说容量超过被淘汰的时候，我们输出一个日志
             .build();
 
 
     /**
-     * 根据 appId 获取服务（带缓存）
+     * 根据 appId 获取对应的服务实例（带缓存）
      */
-    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
-        return serviceCache.get(appId, this::createAiCodeGeneratorService);
+    public AiCodeGeneratorService getAiCodeGeneratorService(long appId , CodeGenTypeEnum codeGenType) {
+        String cacheKey = buildCacheKey(appId, codeGenType);
+        return serviceCache.get(cacheKey, key ->createAiCodeGeneratorService(appId,codeGenType));
                           // 如果缓存中没有，就调用指定的方法，生成一个 AI Service 再返回
     }
+
+    /**
+     * 根据 appId 获取服务（带缓存）这个方法是为了兼容历史逻辑，之前没有枚举的时候的
+     */
+    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
+        return getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
+    }
+
 
     /**
      * 创建新的 AI 服务实例
@@ -86,7 +109,7 @@ public class AiCodeGeneratorServiceFactory {
      * 所以这里的加载对话记忆，正常情况来说也不会多次执行，除非过了一个小时用户再来对话
      * 这个时候缓存中没有值了，Redis 中的 Key 也过期了，才需要重新初始化
      */
-    private AiCodeGeneratorService createAiCodeGeneratorService(long appId) {
+    private AiCodeGeneratorService createAiCodeGeneratorService(long appId,CodeGenTypeEnum codeGenType) {
         log.info("为 appId: {} 创建新的 AI 服务实例", appId);
         // 根据 appId 构建独立的对话记忆
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
@@ -100,11 +123,36 @@ public class AiCodeGeneratorServiceFactory {
         // 初始化客户端的时候，加载对话历史到 chatMemory 中
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
 
-        return AiServices.builder(AiCodeGeneratorService.class)
-                .chatModel(chatModel)
-                .streamingChatModel(streamingChatModel)
-                .chatMemory(chatMemory)
-                .build();
+        // 根据代码生成类型选择不同的模型配置
+        return switch (codeGenType) {
+            // Vue 项目生成使用推理模型
+            case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
+                    .streamingChatModel(reasoningStreamingChatModel)
+                    .chatMemoryProvider(memoryId -> chatMemory) // 根据不同的 appId 来提供不同的对话记忆，因为我在方法上使用了工具的上下文传参，这里必须要指定
+                    .tools(new FileWriteTool()) // 注册工具
+                    // 处理工具调用幻觉问题
+                    .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
+                            toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
+                    )) // 当我们的 AI 出现幻觉，调用了一个不存在的工具时怎么去处理，构造一个工具执行结果，告诉 AI 执行没有这个工具
+                    .build();
+
+            // HTML 和多文件生成使用默认模型
+            case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
+                    .chatModel(chatModel)
+                    .streamingChatModel(openAiStreamingChatModel)
+                    .chatMemory(chatMemory)
+                    .build();
+
+            default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,
+                    "不支持的代码生成类型: " + codeGenType.getValue());
+        };
+    }
+
+    /**
+     * 构建缓存键
+     */
+    private String buildCacheKey(long appId, CodeGenTypeEnum codeGenType) {
+        return appId + "_" + codeGenType.getValue();
     }
 
 
@@ -130,13 +178,15 @@ public class AiCodeGeneratorServiceFactory {
 //                .build();
 //    }
 
+
     /**
      * 之前共用一个 AI Service 的时候，是不需要传 appId 的话，这里为了不改变原来的逻辑，定义一个方法
      * 默认提供一个 Bean ，原有调用的代码逻辑不变
+     * 为了兼容老逻辑
      */
     @Bean
     public AiCodeGeneratorService aiCodeGeneratorService() {
-        return getAiCodeGeneratorService(0L);
+        return getAiCodeGeneratorService(0);
     }
 
 
@@ -154,7 +204,6 @@ public class AiCodeGeneratorServiceFactory {
 //                        .maxMessages(20)
 //                        .build())
 //                .build();
-
 
 
     /**
