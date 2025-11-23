@@ -36,7 +36,7 @@ public class ChatHistoryController {
 
 
     /**
-     * 分页查询某个应用的对话历史（游标查询）
+     * 分页查询某个应用的对话历史（基于对话时间进行游标查询）
      *
      * @param appId          应用ID
      * @param pageSize       页面大小
@@ -73,7 +73,4 @@ public class ChatHistoryController {
         Page<ChatHistory> result = chatHistoryService.page(Page.of(pageNum, pageSize), queryWrapper);
         return ResultUtils.success(result);
     }
-
-
-
 }

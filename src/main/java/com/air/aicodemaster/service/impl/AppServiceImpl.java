@@ -67,23 +67,30 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
-        // 2. 查询应用信息
+
+        // 2. 判断该应用是否存在
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        // 3. 验证用户是否有权限访问该应用，仅本人可以生成代码
+
+        // 3. 验证用户是否有权限访问该应用，本人仅可以对自己的应用访问
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
         }
-        // 4. 获取应用的代码生成类型
+
+        // 4. 获取该应用的代码生成类型
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 5. 通过校验后，添加用户消息到对话历史
+
+        // 5. 校验通过，先添加用户消息到对话历史
         chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        // 6. 调用 AI 生成代码，其实在门面类中已经对流进行拼接了，那一步已经可以保存数据库了，但是为了隔离开来，这里再处理一遍
+
+        // 6. 调用 AI 生成代码，其实在门面类中已经对流进行拼接已经可以将其保存到数据库了
+        //    但是为了使业务隔离开来，门面类保存拼接代码保存到文件，这里拼接是为了保存 AI 响应历史
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+
         // 7. 收集AI响应内容并在完成后记录到对话历史
         StringBuilder aiResponseBuilder = new StringBuilder();
         return contentFlux
@@ -102,7 +109,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
                     }
                 })
                 .doOnError(error -> {
-                    // 如果AI回复失败，也要记录错误消息
+                    // 如果AI回复失败，也要记录错误消息到对话历史
                     String errorMessage = "AI回复失败: " + error.getMessage();
                     chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
                 });
@@ -119,35 +126,44 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR, "用户未登录");
+
         // 2. 查询应用信息
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+
         // 3. 验证用户是否有权限部署该应用，仅本人可以部署
         if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
+
         // 4. 检查是否已有 deployKey
         String deployKey = app.getDeployKey();
         // 没有则生成 6 位 deployKey（大小写字母 + 数字）
         if (StrUtil.isBlank(deployKey)) {
             deployKey = RandomUtil.randomString(6);
         }
+
         // 5. 获取代码生成类型，构建源目录路径
         String codeGenType = app.getCodeGenType();
         String sourceDirName = codeGenType + "_" + appId;
+        // 这里是应用浏览的路径
         String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+
         // 6. 检查源目录是否存在
         File sourceDir = new File(sourceDirPath);
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
+
         // 7. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
+            // 进行复制，并且还支持覆盖旧的文件
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
         }
+
         // 8. 更新应用的 deployKey 和部署时间
         App updateApp = new App();
         updateApp.setId(appId);
@@ -155,6 +171,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         updateApp.setDeployedTime(LocalDateTime.now());
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
+
         // 9. 返回可访问的 URL
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
@@ -211,6 +228,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
                 .eq("userId", userId)
                 .orderBy(sortField, "ascend".equals(sortOrder));
     }
+
 
     /**
      * 批处理
@@ -274,6 +292,4 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 调用父类的删除方法
         return super.removeById(id);
     }
-
-
 }

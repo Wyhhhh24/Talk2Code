@@ -45,5 +45,6 @@ public class ChatHistoryQueryRequest extends PageRequest implements Serializable
      */
     private LocalDateTime lastCreateTime;
 
+
     private static final long serialVersionUID = 1L;
 }

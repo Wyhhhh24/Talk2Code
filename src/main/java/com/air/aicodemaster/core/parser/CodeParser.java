@@ -7,6 +7,7 @@ package com.air.aicodemaster.core.parser;
  *
  * 代码解析器策略接口
  * 这里需要用到泛型，因为代码解析器返回值是不固定的，有可能是 HtmlCodeResult ，有可能是 MultiFileCodeResult
+ * 也就是定义了一套标准，每一个代码解析器都需要实现这个接口
  */
 public interface CodeParser<T> {
 
@@ -18,5 +19,4 @@ public interface CodeParser<T> {
      * 这里返回值不固定的情况下，我们就把返回值设定为一个泛型，动态交给子类去实现，来定义返回值类型
      */
     T parseCode (String codeContent);
-
 }

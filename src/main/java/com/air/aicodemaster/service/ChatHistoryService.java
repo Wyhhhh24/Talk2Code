@@ -42,6 +42,7 @@ public interface ChatHistoryService extends IService<ChatHistory> {
      */
     int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount);
 
+
     /**
      * 通过查询条件获取 QueryWrapper
      */

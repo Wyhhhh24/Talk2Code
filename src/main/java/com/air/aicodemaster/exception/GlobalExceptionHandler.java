@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     /**
-     * 捕捉业务异常
+     * 捕捉自定义的业务异常
      */
     @ExceptionHandler(BusinessException.class)
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
@@ -26,7 +26,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 捕捉系统异常
+     * 捕捉系统异常，未知的异常这里被捕捉，然后统一的响应
      */
     @ExceptionHandler(RuntimeException.class)
     public BaseResponse<?> runtimeExceptionHandler(RuntimeException e) {

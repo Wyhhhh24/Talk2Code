@@ -21,7 +21,7 @@ public enum CodeGenTypeEnum {
     }
 
     /**
-     * 根据 value 获取枚举
+     * 根据 value 获取对应的枚举
      *
      * @param value 枚举值的value
      * @return 枚举值

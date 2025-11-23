@@ -26,7 +26,7 @@ public class RedisChatMemoryStoreConfig {
     private long ttl;  // 键的存活时间
 
     /**
-     * LangChain4j 和 redis 的整合包中，我们必须要提供的，定义 Redis 的存储
+     * LangChain4j 和 redis 的整合包中，我们必须要提供该配置类，定义 Redis 的存储
      */
     @Bean
     public RedisChatMemoryStore redisChatMemoryStore() {

@@ -32,7 +32,7 @@ public class AiCodeGeneratorFacade {
     @Resource
     private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 
-    // 原始单个 AI 服务实例，直接注入，现在是通过 AiCodeGeneratorServiceFactory 工厂获取
+//    // 原先是各个应用共用一个 AI 服务实例，可以直接注入同一个服务实例使用，现在是通过 AiCodeGeneratorServiceFactory 不同的应用获取不同的实例
 //    @Resource
 //    private AiCodeGeneratorService aiCodeGeneratorService;
 
@@ -50,8 +50,9 @@ public class AiCodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
-        // 调用 AI Service 工厂根据 appId 获取相应的 AI 服务实例
+        // 调用 AI Service 工厂根据 appId 获取对应的 AI 服务实例
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
+
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 // 获取响应流，调用所封装的通用方法，解析响应结果，保存响应文件
@@ -71,8 +72,9 @@ public class AiCodeGeneratorFacade {
         };
     }
 
+
     /**
-     * 通用流式代码处理方法
+     * 通用流式代码处理方法（响应解析，代码文件保存）
      *
      * @param codeStream  代码流
      * @param codeGenType 代码生成类型

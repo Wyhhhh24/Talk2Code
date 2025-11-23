@@ -48,15 +48,13 @@ public class AppController {
     @Resource
     private AppService appService;
 
-
-
     /**
      * 应用聊天生成代码（流式 SSE）
      * 需要通过 SSE 这种协议返回给前端，让前端能够接收我们后端处理的流式内容，而不是阻塞返回
      * 如果要使用 SSE 这种流式对话方法，要给这个接口的响应做一个特殊的声明
      *
-     * 这个接口建议用 GET 类型，如果说接口接收的参数不复杂没有超过 GET 请求限制那就用 GET
-     * 这样前端在用 EventSource 去对接后端 SSE 接口的时候，GET 请求会更便于对接，测试起来更方便
+     * 这个接口建议用 GET 类型，如果说接口接收的参数不复杂且没有超过 GET 请求限制那就用 GET
+     * 前端在用 EventSource 去对接后端 SSE 接口的时候，GET 请求会更便于对接，测试起来更方便
      * @param appId   应用 ID
      * @param message 用户消息
      * @param request 请求对象
@@ -125,17 +123,18 @@ public class AppController {
      */
     @PostMapping("/deploy")
     public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        // 参数校验
         ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
         Long appId = appDeployRequest.getAppId();
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        // 调用服务部署应用
+
+        // 对该应用进行部署，返回可访问的 URL
         String deployUrl = appService.deployApp(appId, loginUser);
         return ResultUtils.success(deployUrl);
     }
-
-
 
 
     /**
@@ -147,23 +146,29 @@ public class AppController {
      */
     @PostMapping("/add")
     public BaseResponse<Long> addApp(@RequestBody AppAddRequest appAddRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         // 参数校验
+        ThrowUtils.throwIf(appAddRequest == null, ErrorCode.PARAMS_ERROR);
         String initPrompt = appAddRequest.getInitPrompt();
         ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化 prompt 不能为空");
+
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
+
         // 构造入库对象
         App app = new App();
         BeanUtil.copyProperties(appAddRequest, app);
         app.setUserId(loginUser.getId());
+
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // TODO 暂时现在的所有代码生成设置为多文件生成
+        // TODO 暂时现在的所有应用都是多文件生成
         app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+
         // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+
+        // 返回 appId
         return ResultUtils.success(app.getId());
     }
 
@@ -178,23 +183,29 @@ public class AppController {
      */
     @PostMapping("/update")
     public BaseResponse<Boolean> updateApp(@RequestBody AppUpdateRequest appUpdateRequest, HttpServletRequest request) {
+        // 参数校验
         if (appUpdateRequest == null || appUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+
+        // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
+
+        // 判断该应用是否存在
         long id = appUpdateRequest.getId();
-        // 判断是否存在
         App oldApp = appService.getById(id);
         ThrowUtils.throwIf(oldApp == null, ErrorCode.NOT_FOUND_ERROR);
-        // 仅本人可更新
+
+        // 本人仅可以更新自己的应用
         if (!oldApp.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
+
+        // 操作持久层
         App app = new App();
         app.setId(id);
         app.setAppName(appUpdateRequest.getAppName());
-        // 手动设置了 editTime，这是为了区分用户主动编辑和系统自动更新的时间
-        // 设置编辑时间
+        // 手动设置了 editTime，该字段是为了区分用户主动编辑和系统自动更新的时间
         app.setEditTime(LocalDateTime.now());
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
@@ -211,35 +222,44 @@ public class AppController {
      */
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteApp(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        // 参数校验
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        // 获取当前用户
         User loginUser = userService.getLoginUser(request);
+
+        // 判断该 App 是否存在
         long id = deleteRequest.getId();
-        // 判断是否存在
         App oldApp = appService.getById(id);
         ThrowUtils.throwIf(oldApp == null, ErrorCode.NOT_FOUND_ERROR);
-        // 仅本人或管理员可删除
+
+        // 仅本人或管理员可删除应用
         if (!oldApp.getUserId().equals(loginUser.getId()) && !UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
+
+        // 删除应用的同时，也删除该应用关联的对话历史
         boolean result = appService.removeById(id);
         return ResultUtils.success(result);
     }
 
 
     /**
-     * 根据 id 获取应用详情（关联应用的用户信息）
+     * 根据 id 获取应用详情（关联该应用的用户信息）
      * 先查询 App，再查询封装类
      * @param id      应用 id
      * @return 应用详情
      */
     @GetMapping("/get/vo")
     public BaseResponse<AppVO> getAppVOById(long id) {
+        // 参数校验
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+
         // 查询数据库
         App app = appService.getById(id);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
+
         // 获取封装类（包含用户信息）
         return ResultUtils.success(appService.getAppVO(app));
     }
@@ -290,6 +310,7 @@ public class AppController {
     public BaseResponse<Page<AppVO>> listGoodAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         // 1.参数判空
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
+
         // 2.限制每页最多 20 个
         long pageSize = appQueryRequest.getPageSize();
         ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
@@ -298,8 +319,10 @@ public class AppController {
         // 只查询精选的应用
         appQueryRequest.setPriority(AppConstant.GOOD_APP_PRIORITY);
         QueryWrapper queryWrapper = appService.getQueryWrapper(appQueryRequest);
+
         // 分页查询
         Page<App> appPage = appService.page(Page.of(pageNum, pageSize), queryWrapper);
+
         // 数据封装
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords());

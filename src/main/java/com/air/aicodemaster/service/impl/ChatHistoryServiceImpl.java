@@ -56,9 +56,11 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "消息内容不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(messageType), ErrorCode.PARAMS_ERROR, "消息类型不能为空");
         ThrowUtils.throwIf(userId == null || userId <= 0, ErrorCode.PARAMS_ERROR, "用户ID不能为空");
+
         // 2.验证消息类型是否有效
         ChatHistoryMessageTypeEnum messageTypeEnum = ChatHistoryMessageTypeEnum.getEnumByValue(messageType);
         ThrowUtils.throwIf(messageTypeEnum == null, ErrorCode.PARAMS_ERROR, "不支持的消息类型: " + messageType);
+
         // 3.操作持久层添加对话消息
         ChatHistory chatHistory = ChatHistory.builder()
                 .appId(appId)
@@ -70,7 +72,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     }
 
     /**
-     * 当应用被删除时，需要同步清理对话历史数据
+     * 当应用被删除时，需要同步清理该应用下的对话历史数据
      */
     @Override
     public boolean deleteByAppId(Long appId) {
@@ -81,6 +83,15 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     }
 
 
+    /**
+     * 分页获取应用下的对话历史
+     *
+     * @param appId       应用ID
+     * @param pageSize    页面大小
+     * @param lastCreateTime 最后创建时间
+     * @param loginUser   登录用户
+     * @return 对话历史列表
+     */
     @Override
     public Page<ChatHistory> listAppChatHistoryByPage(Long appId, int pageSize,
                                                       LocalDateTime lastCreateTime,
@@ -89,12 +100,13 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
         ThrowUtils.throwIf(pageSize <= 0 || pageSize > 50, ErrorCode.PARAMS_ERROR, "页面大小必须在1-50之间");
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+
         // 验证权限：只有应用创建者和管理员可以查看
         App app = appService.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         boolean isAdmin = UserConstant.ADMIN_ROLE.equals(loginUser.getUserRole());
         boolean isCreator = app.getUserId().equals(loginUser.getId());
-        // 既不是管理员也不是创建者
+        // 既不是管理员也不是创建者不能查看
         ThrowUtils.throwIf(!isAdmin && !isCreator, ErrorCode.NO_AUTH_ERROR, "无权查看该应用的对话历史");
 
         // 构建查询条件
@@ -102,6 +114,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         queryRequest.setAppId(appId);
         queryRequest.setLastCreateTime(lastCreateTime);
         QueryWrapper queryWrapper = this.getQueryWrapper(queryRequest);
+
         // 使用游标查询，每一次只查询数据对应索引后面的第一页，所以这里的 pageNum = 1
         return this.page(Page.of(1, pageSize), queryWrapper);
     }
@@ -115,26 +128,31 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount) {
         try {
             // 直接构造查询条件，起始点为 1 而不是 0，用于排除最新的用户消息
+            // 从第一条开始，我们的业务流程是这样的：
+            // 先保存的最新的消息到数据库中，当前的这次提问已经入库了，入库之后才调的 AI
+            // 调 AI 的时候，先获取对话记忆，这里生成的 AI 服务已经创建出对话记忆了
+            // 这个时候对话记忆就已经会把用户的第一条消息交给框架去管理了，所以我们再从数据库中把最新的消息也加载过来的话
+            // 那就会出现两条重复的消息，所以这里我们忽略掉最新的那条信息，避免重复加载
             QueryWrapper queryWrapper = QueryWrapper.create()
                     .eq(ChatHistory::getAppId, appId)
                     .orderBy(ChatHistory::getCreateTime, false) // 降序获取最新的
                     .limit(1, maxCount);
-            // 从第一条开始，我们的业务流程是这样的：
-            // 先保存的最新的消息到数据库中，当前的这次提问已经入库了，入库之后就调 AI 了
-            // 调 AI 的时候，先获取对话记忆，这里生成的 AI 服务已经创建出对话记忆了
-            // 这个时候对话记忆就已经会把用户的第一条消息交给 AI 去管理了，所以我们再从数据库中把最新的消息也加载过来
-            // 那就会出现两条重复的消息，所以这里我们忽略掉最新的那条信息，避免重复加载
+
+            // 查询数据库，并进行判断
             List<ChatHistory> historyList = this.list(queryWrapper);
             if (CollUtil.isEmpty(historyList)) {
                 return 0;
             }
-            // 反转列表，确保按时间正序（老的在前，新的在后）
+
+            // 反转列表，确保按时间正序（老的在前，新的在后），查出来的时候是新的在前老的在后
             historyList = historyList.reversed();
-            // 按时间顺序添加到记忆中
+
+            // 按时间顺序添加到 chatMemory 中
             int loadedCount = 0;
+
             // 先清理历史缓存，防止重复加载
             // 如果我们每一次获取 AI Service 的时候，都要去进行对话记忆的加载，那如果我的 AI Service 还没过期
-            // 我的 Redis 中的数据也没过期，那如果再重新加载一遍是不是消息就两遍了
+            // 我的 Redis 中的数据也没过期，那如果再重新加载一遍是不是消息就两遍了，所以为了防止，先对其进行清空
             chatMemory.clear();
             for (ChatHistory history : historyList) {
                 if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
@@ -155,9 +173,8 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     }
 
 
-
     /**
-     * 获取查询包装类
+     * 根据查询条件，获取对应的 QueryWrapper 包装类
      *
      * @param chatHistoryQueryRequest
      * @return
@@ -195,7 +212,4 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         }
         return queryWrapper;
     }
-
-
-
 }

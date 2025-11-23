@@ -76,23 +76,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
         return user.getId();
     }
 
-    @Override
-    public String getEncryptPassword(String userPassword) {
-        // 盐值，混淆密码
-        final String SALT = "Wyhhhh";
-        return DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
-    }
 
-    @Override
-    public LoginUserVO getLoginUserVO(User user) {
-        if (user == null) {
-            return null;
-        }
-        LoginUserVO loginUserVO = new LoginUserVO();
-        BeanUtil.copyProperties(user, loginUserVO);
-        return loginUserVO;
-    }
-
+    /**
+     * 用户登录
+     */
     @Override
     public LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request) {
         // 1. 校验
@@ -126,7 +113,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
 
 
     /**
-     * 获取当前登录的用户信息
+     * 通过 session 获取当前登录的用户信息
      */
     @Override
     public User getLoginUser(HttpServletRequest request) {
@@ -149,7 +136,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
 
 
     /**
-     * 用户注销
+     * 用户注销，退出登录，清除 session 中保存的登录态
      */
     @Override
     public boolean userLogout(HttpServletRequest request) {
@@ -164,6 +151,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
     }
 
 
+
     /**
      * 获取脱敏的用户信息
      */
@@ -176,6 +164,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
         BeanUtil.copyProperties(user, userVO);
         return userVO;
     }
+
 
 
     /**
@@ -217,4 +206,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
     }
 
 
+    /**
+     * 加密
+     */
+    @Override
+    public String getEncryptPassword(String userPassword) {
+        // 盐值，混淆密码
+        final String SALT = "Wyhhhh";
+        return DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
+    }
+
+
+    /**
+     * 获取登录用户脱敏的用户信息
+     */
+    @Override
+    public LoginUserVO getLoginUserVO(User user) {
+        if (user == null) {
+            return null;
+        }
+        LoginUserVO loginUserVO = new LoginUserVO();
+        BeanUtil.copyProperties(user, loginUserVO);
+        return loginUserVO;
+    }
 }

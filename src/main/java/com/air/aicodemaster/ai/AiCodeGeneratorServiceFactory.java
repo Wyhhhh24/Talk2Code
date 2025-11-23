@@ -43,6 +43,7 @@ public class AiCodeGeneratorServiceFactory {
     /**
      * 对话历史
      */
+    @Resource
     private ChatHistoryService chatHistoryService;
 
     /**
@@ -96,7 +97,9 @@ public class AiCodeGeneratorServiceFactory {
                 .build();
         // 从数据库中加载对话历史到记忆中
         // 现在如果没有 AI 服务实例的隔离，可能就需要自己去区分什么时候清理对话记忆，我要把对话记忆加载到哪一个 ChatMemory 里面
+        // 初始化客户端的时候，加载对话历史到 chatMemory 中
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
+
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(streamingChatModel)

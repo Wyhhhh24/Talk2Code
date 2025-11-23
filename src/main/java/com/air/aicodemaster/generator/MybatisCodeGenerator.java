@@ -8,6 +8,9 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import java.util.Map;
 
+/**
+ * Mybatis-flex 代码生成器
+ */
 public class MybatisCodeGenerator {
 
     // 需要生成的表名

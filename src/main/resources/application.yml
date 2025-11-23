@@ -19,7 +19,7 @@ spring:
     password: 123456
   data:
     redis:
-      host: localhost
+      host: 192.168.12.125
       port: 6379
       password: 123456
       ttl: 3600  # 不是连接超时时间，等一下我们会用这个配置来代表 Redis 的 Key 的过期时间，单位是秒
