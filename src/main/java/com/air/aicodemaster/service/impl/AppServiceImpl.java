@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.air.aicodemaster.constant.AppConstant;
 import com.air.aicodemaster.core.AiCodeGeneratorFacade;
+import com.air.aicodemaster.core.handler.StreamHandlerExecutor;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
 import com.air.aicodemaster.exception.ThrowUtils;
@@ -55,6 +56,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
     @Resource
     private ChatHistoryService chatHistoryService;
 
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
+
 
     /**
      * 通过对话生成代码
@@ -89,30 +93,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
 
         // 6. 调用 AI 生成代码，其实在门面类中已经对流进行拼接已经可以将其保存到数据库了
         //    但是为了使业务隔离开来，门面类保存拼接代码保存到文件，这里拼接是为了保存 AI 响应历史
-        Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
 
-        // 7. 收集AI响应内容并在完成后记录到对话历史
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return contentFlux
-                // 这里的 map 方法和 doOnNext 方法类似，但是 map 可以对流进行一个处理然后返回出去，而 doOnNext 只是处理一下不改变原有流的内容
-                // 所以这里用 map 的好处是如果想改流的内容也可以改，这里暂时不改
-                .map(chunk -> {
-                    // 收集AI响应内容
-                    aiResponseBuilder.append(chunk);
-                    return chunk;
-                })
-                .doOnComplete(() -> {
-                    // 流式响应完成后，添加AI消息到对话历史
-                    String aiResponse = aiResponseBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                    }
-                })
-                .doOnError(error -> {
-                    // 如果AI回复失败，也要记录错误消息到对话历史
-                    String errorMessage = "AI回复失败: " + error.getMessage();
-                    chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                });
+        // 7. 调用流处理执行器，收集AI响应内容，并在完成后记录到对话历史
+        return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
 

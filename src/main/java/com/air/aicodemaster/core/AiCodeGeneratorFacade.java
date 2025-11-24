@@ -1,14 +1,21 @@
 package com.air.aicodemaster.core;
 
+import cn.hutool.json.JSONUtil;
 import com.air.aicodemaster.ai.AiCodeGeneratorService;
 import com.air.aicodemaster.ai.AiCodeGeneratorServiceFactory;
 import com.air.aicodemaster.ai.model.HtmlCodeResult;
 import com.air.aicodemaster.ai.model.MultiFileCodeResult;
+import com.air.aicodemaster.ai.model.message.AiResponseMessage;
+import com.air.aicodemaster.ai.model.message.ToolExecutedMessage;
+import com.air.aicodemaster.ai.model.message.ToolRequestMessage;
 import com.air.aicodemaster.core.parser.CodeParserExecutor;
 import com.air.aicodemaster.core.saver.CodeFileSaverExecutor;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
 import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.tool.ToolExecution;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -66,8 +73,8 @@ public class AiCodeGeneratorFacade {
                 yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE,appId);
             }
             case VUE_PROJECT -> {
-                Flux<String> codeStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
-                yield processCodeStream(codeStream, CodeGenTypeEnum.MULTI_FILE, appId);
+                TokenStream tokenStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                yield processTokenStream(tokenStream); // 把 TokenStream 转换为 Flux<String>   适配器模式：原本的插头插不了，直接用一个中转器，让新的插头支持原本的插头
             }
             default -> {
                 String errorMessage = "不支持的生成类型：" + codeGenTypeEnum.getValue();
@@ -75,6 +82,44 @@ public class AiCodeGeneratorFacade {
             }
         };
     }
+
+
+    /**
+     * 将 TokenStream 转换为 Flux<String>，并传递工具调用信息
+     *
+     * @param tokenStream TokenStream 对象
+     * @return Flux<String> 流式响应
+     */
+    private Flux<String> processTokenStream(TokenStream tokenStream) {
+        // 我们可以自己构造出一条流，不仅可以处理 AI 得到的流，还可以用 AI 的流构造一个新的流
+        return Flux.create(sink -> { // sink 理解为通过这个 sink 对象，可以往这个流里面添加数据
+            // 在这里面监听 tokenStream
+            tokenStream.onPartialResponse((String partialResponse) -> { // 监听 AI 返回的内容，partialResponse 部分响应碎片，也就是 AI 流式响应的内容
+                        // 把这个内容封装成我们定义的 Response 对象
+                        AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
+                        // 往新的流里面写数据，通过这个 sink.next() 把这个对象转成 JSON 格式，写入到新的流中
+                        // 下游获取到流对象之后，就可以解析这个 JSON ，又得到这个对象，是不是就可以进行处理了
+                        sink.next(JSONUtil.toJsonStr(aiResponseMessage));
+                    })
+                    .onPartialToolExecutionRequest((index, toolExecutionRequest) -> {  // 获取工具调用的流式输出
+                        ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
+                        sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+                    })
+                    .onToolExecuted((ToolExecution toolExecution) -> {  // 获取工具调用完成的结果，当工具调用完，有了完整参数之后，以及有了返回结果之后，调用它进行封装
+                        ToolExecutedMessage toolExecutedMessage = new ToolExecutedMessage(toolExecution);
+                        sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
+                    })
+                    .onCompleteResponse((ChatResponse response) -> {  // 最后调用完成，调用 sink.complete() 这样我们的 Flux 流就知道什么时候结束了
+                        sink.complete();
+                    })
+                    .onError((Throwable error) -> {  // 包括如果出现任何的错误，我们也要告诉新的 Flux 流，出了一个什么错误
+                        error.printStackTrace();
+                        sink.error(error);
+                    })
+                    .start(); // 开始监听
+        });
+    }
+
 
 
     /**

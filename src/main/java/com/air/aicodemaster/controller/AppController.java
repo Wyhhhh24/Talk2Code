@@ -161,8 +161,8 @@ public class AppController {
 
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
-        // TODO 暂时现在的所有应用都是多文件生成
-        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        // TODO 暂时现在的所有应用都是 VUE 工程生成
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
 
         // 插入数据库
         boolean result = appService.save(app);

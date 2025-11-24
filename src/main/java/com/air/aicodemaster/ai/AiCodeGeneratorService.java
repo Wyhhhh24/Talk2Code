@@ -4,6 +4,7 @@ import com.air.aicodemaster.ai.model.HtmlCodeResult;
 import com.air.aicodemaster.ai.model.MultiFileCodeResult;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
@@ -67,6 +68,5 @@ public interface AiCodeGeneratorService {
      * 一旦用上了 @MemoryId 注解，就得要用 @UserMessage 注解
      */
     @SystemMessage(fromResource = "prompt/codegen-vue-project-system-prompt.txt")
-    Flux<String> generateVueProjectCodeStream(@MemoryId long appId, @UserMessage String userMessage);
-
+    TokenStream generateVueProjectCodeStream(@MemoryId long appId, @UserMessage String userMessage);
 }

@@ -12,6 +12,7 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -39,12 +40,11 @@ public class AiCodeGeneratorServiceFactory {
      * 两个 StreamingChatModel 的 Bean 的话会冲突，这里修改注入的 Bean 名称为具体的即可
      * 否则框架不知道注入哪一个 Bean
      */
-    @Resource
-    private StreamingChatModel openAiStreamingChatModel;
 
-    /**
-     * 思考模型
-     */
+    @Resource
+    private OpenAiStreamingChatModel openAiStreamingChatModel;
+
+
     @Resource
     private StreamingChatModel reasoningStreamingChatModel;
 
