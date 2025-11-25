@@ -44,7 +44,6 @@ public class AiCodeGeneratorFacade {
 //    private AiCodeGeneratorService aiCodeGeneratorService;
 
 
-
     /**
      * 统一入口：根据类型生成并保存代码（流式输出）
      * 核心逻辑都‌是：拼接 AI 实时响应的字符串，并在 流式返回完成后解‍析字符串并保存代码文件
@@ -54,15 +53,17 @@ public class AiCodeGeneratorFacade {
      * @param appId           应用id
      */
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum , Long appId) {
+        // 再校验一遍
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+
         // 调用 AI Service 工厂根据 appId 获取对应的 AI 服务实例
         AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId,codeGenTypeEnum);
 
         return switch (codeGenTypeEnum) {
             case HTML -> {
-                // 获取响应流，调用所封装的通用方法，解析响应结果，保存响应文件
+                // 获取响应流，然后调用所封装的通用方法，解析流式响应结果，保存响应文件
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);
                 // processCodeStream 通用方法就是对 generateAndSaveHtmlCodeStream 和 generateAndSaveMultiFileCodeStream
                 // 这两个具有相同的流程，进行封装
@@ -94,29 +95,42 @@ public class AiCodeGeneratorFacade {
         // 我们可以自己构造出一条流，不仅可以处理 AI 得到的流，还可以用 AI 的流构造一个新的流
         return Flux.create(sink -> { // sink 理解为通过这个 sink 对象，可以往这个流里面添加数据
             // 在这里面监听 tokenStream
-            tokenStream.onPartialResponse((String partialResponse) -> { // 监听 AI 返回的内容，partialResponse 部分响应碎片，也就是 AI 流式响应的内容
+            tokenStream
+                    // 监听 AI 返回的内容，partialResponse 部分响应碎片，也就是 AI 流式响应的内容
+                    .onPartialResponse((String partialResponse) -> {
                         // 把这个内容封装成我们定义的 Response 对象
                         AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
                         // 往新的流里面写数据，通过这个 sink.next() 把这个对象转成 JSON 格式，写入到新的流中
                         // 下游获取到流对象之后，就可以解析这个 JSON ，又得到这个对象，是不是就可以进行处理了
                         sink.next(JSONUtil.toJsonStr(aiResponseMessage));
                     })
-                    .onPartialToolExecutionRequest((index, toolExecutionRequest) -> {  // 获取工具调用的流式输出
+                    // 获取工具调用的流式输出
+                    .onPartialToolExecutionRequest((index, toolExecutionRequest) -> {
                         ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
                         sink.next(JSONUtil.toJsonStr(toolRequestMessage));
                     })
-                    .onToolExecuted((ToolExecution toolExecution) -> {  // 获取工具调用完成的结果，当工具调用完，有了完整参数之后，以及有了返回结果之后，调用它进行封装
+                    // 获取工具调用完成的结果，当工具调用完，有了完整参数之后，以及有了返回结果之后，调用它进行封装
+                    .onToolExecuted((ToolExecution toolExecution) -> {
                         ToolExecutedMessage toolExecutedMessage = new ToolExecutedMessage(toolExecution);
                         sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
                     })
-                    .onCompleteResponse((ChatResponse response) -> {  // 最后调用完成，调用 sink.complete() 这样我们的 Flux 流就知道什么时候结束了
+                    // LangChain4j 的回调设计是这样的：
+                    // onPartialToolExecutionRequest：在工具调用“准备阶段”会被多次触发。AI 会分片输出工具的参数（arguments），每输出一段就触发一次，因此你会看到多次回调，直到参数拼完整。
+                    // onToolExecuted：工具实际执行完毕后只触发一次。这次回调会携带完整的 ToolExecution 信息，包括工具名、最终参数、执行结果（content 等），不是流式的，而是一口气返回完整数据。
+                    // 换句话说：onPartialToolExecutionRequest 是“流式拼参数”，onToolExecuted 是“最终结果快照”。
+                    // 因此，我们在 JsonMessageStreamHandler 里只在首次 ToolRequest 时输出调用工具的提示，在 ToolExecuted 阶段才拿到完整的文件路径和内容。
+
+                    // tokenStream 结束，调用 sink.complete() 这样我们的 Flux 流就知道什么时候结束了
+                    .onCompleteResponse((ChatResponse response) -> {
                         sink.complete();
                     })
-                    .onError((Throwable error) -> {  // 包括如果出现任何的错误，我们也要告诉新的 Flux 流，出了一个什么错误
+                    // 包括如果出现任何的错误，我们也要告诉新的 Flux 流，出了一个什么错误
+                    .onError((Throwable error) -> {
                         error.printStackTrace();
                         sink.error(error);
                     })
-                    .start(); // 开始监听
+                    // 开始监听
+                    .start();
         });
     }
 

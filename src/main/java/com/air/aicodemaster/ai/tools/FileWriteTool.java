@@ -24,16 +24,16 @@ public class FileWriteTool {
     /**
      * 标准工具类的定义
      * 为了减轻工具幻觉（错误调用工具或者传参错误），尽量给工具和每个参数添加描述
-     * 由于每个 appId 对应一个生成的网站，因此需要根据 appId 构造文件保存路径，可以利用 LangChain4j 工具调用提供的 上下文传参 能力。
-     * 在 AI Service 对话方法中加上 memoryId 参数，
-     * 然后在调用这个工具的时候传入这个 appId ，这样工具调用时 LangChain4j 框架会自动把在调 AI 时传的 appId 作为参数提供给工具方法
+     * 由于每个 appId 对应一个生成的网站，因此需要根据 appId 构造文件保存路径，可以利用 LangChain4j 工具调用提供的 上下文传参 能力，把 appId 传进工具中来。
+     * 在 AI Service 对话方法中加上 memoryId 注解标注的参数，
+     * 然后在调用这个方法时传入这个 appId ，这样工具调用时 LangChain4j 框架会自动把传过来的 appId 作为参数提供给工具方法内部
      * 而且这个 appId 不需要告诉 AI ，是框架帮你维护了这个 appId ，框架发现要调工具就顺手帮你把 appId 传过来
-     * 然后就能在工具中使用 memoryId 了。
+     * 然后就能在工具中使用 appId 了。
      *
-     * 标识了工具的方法返回值可以是任意类型，框架会帮你转换，不过能返回 String 就返回 String 因为这样的话减少了框架帮你做的转换
+     * 标识了工具的方法返回值可以是任意类型，框架会帮你转换，不过能返回 String 就返回 String ，因为这样的话减少了框架帮你做的转换，因为最终给 AI 的还是 String
      * 如果你的返回值就是 String ，返回值会完完全全交给 AI ，减少了中间的转换，防止语义的丢失
      *
-     * LangChain4j 框架就能够把我们在构造 AI 服务时指定的工具翻译成对应的 JSON 文本，放到传递给 AI 的参数中，包含中文的描述那些，所以描述的越具体
+     * LangChain4j 框架能够把我们在构造 AI 服务时指定的工具翻译成对应的 JSON 文本，放到传递给 AI 的参数中，包含工具的中文描述，参数的描述那些，所以描述的越具体
      * 生成内容会更精准
      */
     @Tool("写入文件到指定路径")
@@ -63,13 +63,13 @@ public class FileWriteTool {
                 path = projectRoot.resolve(relativeFilePath);
             }
 
-            // 创建父目录（如果不存在）
+            // 如果父目录不存在，创建父目录，也就是如果这个目录不存在 E:\Javacode\ai-code-master\tmp 就创建
             Path parentDir = path.getParent();
             if (parentDir != null) {
                 Files.createDirectories(parentDir);
             }
 
-            // 写入文件内容
+            // 将内容写入文件
             Files.write(path, content.getBytes(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);

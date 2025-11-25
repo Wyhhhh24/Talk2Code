@@ -1,5 +1,4 @@
 package com.air.aicodemaster.config;
-
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Data;
@@ -27,11 +26,11 @@ public class ReasoningStreamingChatModelConfig {
     @Bean
     public StreamingChatModel reasoningStreamingChatModel() {
         // 为了测试方便临时修改
-        final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;
+//        final String modelName = "deepseek-chat";
+//        final int maxTokens = 8192;
         // 流式推理模型会比较慢，会输出一些思考内容，所以生产环境使用正常的，但是开发调试的时候，还是使用对话模型
-        // final String modelName = "deepseek-reasoner";
-        // final int maxTokens = 32768;
+        final String modelName = "deepseek-reasoner";
+        final int maxTokens = 32768;
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)

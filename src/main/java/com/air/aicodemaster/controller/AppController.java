@@ -74,8 +74,9 @@ public class AppController {
         User loginUser = userService.getLoginUser(request);
         // 调用服务生成代码（流式）
         Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+
         // 为了解决流式输出时空格丢失问题，即将返回的这个流对象，可以再进行处理
-        // 解决方案是对这个流封装一层 JSON 格式，处理这个流，每一个流进行转换
+        // 解决方案是对这个流封装一层 JSON 格式，处理这个流，每一个流进行包装
         // 比如说现在这个流返回的文本块，可以把每一个文本块封装成一个 JSON
         return contentFlux
                 .map(chunk ->{
@@ -100,7 +101,7 @@ public class AppController {
                 // 这样前端只要发现有 done 事件是不是就正常结束了，否则如果调用 onClose 是不是就异常中断了
                 // 这样可以更清晰地区分流的正常结束和异常中断
                 .concatWith(Mono.just(
-                        // 发送结束事件
+                        // 流式输出结束之后，发送结束事件
                         ServerSentEvent.<String>builder()
                                 .event("done")
                                 .data("")

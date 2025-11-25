@@ -122,6 +122,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
 
     /**
      * 对؜话记忆初始化时，需要从数据库中加载对话历史到记‌忆中
+     * 需要注意加载的顺序
      * 加载对话历史到内存
      */
     @Override
@@ -138,23 +139,40 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                     .orderBy(ChatHistory::getCreateTime, false) // 降序获取最新的
                     .limit(1, maxCount);
 
-            // 查询数据库，并进行判断
+            // 查询数据库（新的在前，老的在后）
             List<ChatHistory> historyList = this.list(queryWrapper);
+            //List<ChatHistory> historyList = [
+            //    {id:7, create_time: "10:30:00"}, // 最新的一条
+            //    {id:6, create_time: "10:25:00"},
+            //    {id:5, create_time: "10:20:00"},
+            //    {id:4, create_time: "10:15:00"},
+            //    {id:3, create_time: "10:10:00"}   // 最老的一条
+            //];
             if (CollUtil.isEmpty(historyList)) {
                 return 0;
             }
 
             // 反转列表，确保按时间正序（老的在前，新的在后），查出来的时候是新的在前老的在后
             historyList = historyList.reversed();
+            //historyList = historyList.reversed(); // 变为：
+            //[
+            //    {id:3, create_time: "10:10:00"}, // 最老的一条
+            //    {id:4, create_time: "10:15:00"},
+            //    {id:5, create_time: "10:20:00"},
+            //    {id:6, create_time: "10:25:00"},
+            //    {id:7, create_time: "10:30:00"}  // 最新的一条
+            //]
 
             // 按时间顺序添加到 chatMemory 中
             int loadedCount = 0;
 
-            // 先清理历史缓存，防止重复加载
-            // 如果我们每一次获取 AI Service 的时候，都要去进行对话记忆的加载，那如果我的 AI Service 还没过期
-            // 我的 Redis 中的数据也没过期，那如果再重新加载一遍是不是消息就两遍了，所以为了防止，先对其进行清空
+            // 先清理历史缓存，防止重复加载，也就是将 redis 中该 chatMemory 对应的 appId 对应的 value 清空
+            // 如果我们每一次获取 AI Service 的时候，都要进行对话记忆的加载
+            // 如果存到 Redis 中的对话记忆没过期，那如果再重新加载一遍是不是消息就两遍了，所以为了防止，先对其进行清空
+            // 防止 AI Service 过期了，但是该 AI Service 对应的对话记忆在 Redis 中没有过期 TODO 这里有疑问
             chatMemory.clear();
             for (ChatHistory history : historyList) {
+                // 这里遍历这 List 的话， 最老的一条消息先被添加缓存，也就是上面的3、4、5、6、7，满足时间线，对话记忆更合理
                 if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
                     chatMemory.add(UserMessage.from(history.getMessage()));
                     loadedCount++;

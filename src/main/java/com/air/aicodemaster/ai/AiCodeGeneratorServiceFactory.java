@@ -29,7 +29,7 @@ import java.time.Duration;
 public class AiCodeGeneratorServiceFactory {
 
     /**
-     * 普通的 ChatModel
+     * 普通的 ChatModel ，阻塞输出的
      */
     @Resource
     private ChatModel chatModel;
@@ -39,12 +39,16 @@ public class AiCodeGeneratorServiceFactory {
      * 但是这里的名称得要修改为对应的 Bean 的名称，因为我们现在自定义了一个思考模型的 Bean
      * 两个 StreamingChatModel 的 Bean 的话会冲突，这里修改注入的 Bean 名称为具体的即可
      * 否则框架不知道注入哪一个 Bean
+     *
+     * 对话模型
      */
-
     @Resource
     private OpenAiStreamingChatModel openAiStreamingChatModel;
 
 
+    /**
+     * 推理模型
+     */
     @Resource
     private StreamingChatModel reasoningStreamingChatModel;
 
@@ -55,7 +59,7 @@ public class AiCodeGeneratorServiceFactory {
     private RedisChatMemoryStore redisChatMemoryStore;
 
     /**
-     * 对话历史
+     * 对话历史服务
      */
     @Resource
     private ChatHistoryService chatHistoryService;
@@ -79,7 +83,7 @@ public class AiCodeGeneratorServiceFactory {
     private final Cache<String, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
             .maximumSize(1000)  // 最多加 1000 个 Key
             .expireAfterWrite(Duration.ofMinutes(30)) // 设置 30 分钟过期，正常情况来说，一个用户和同一个 AI 应用对话的时间应该不会超过 30 分钟
-            .expireAfterAccess(Duration.ofMinutes(10)) // 超过半小时之后，内存中的缓存也该淘汰了，在需要使用，重新生成即可
+            .expireAfterAccess(Duration.ofMinutes(10)) // 超过半小时之后，内存中的缓存也该淘汰了，再需要使用，重新生成即可
             .removalListener((key, value, cause) -> {
                 log.debug("AI 服务实例被移除，缓存键: {}, 原因: {}", key, cause);
             }) // 当某一个 Key 被强行删除掉，比如说容量超过被淘汰的时候，我们输出一个日志
@@ -87,7 +91,7 @@ public class AiCodeGeneratorServiceFactory {
 
 
     /**
-     * 根据 appId 获取对应的服务实例（带缓存）
+     * 根据 appId 获取对应的服务实例，缓存中没有就创建（带缓存）
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId , CodeGenTypeEnum codeGenType) {
         String cacheKey = buildCacheKey(appId, codeGenType);
@@ -96,7 +100,7 @@ public class AiCodeGeneratorServiceFactory {
     }
 
     /**
-     * 根据 appId 获取服务（带缓存）这个方法是为了兼容历史逻辑，之前没有枚举的时候的
+     * 根据 appId 获取服务（带缓存）这个方法是为了兼容历史逻辑，之前没有方法参数没有传枚举的时候的旧方法
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
         return getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
@@ -110,17 +114,19 @@ public class AiCodeGeneratorServiceFactory {
      * 这个时候缓存中没有值了，Redis 中的 Key 也过期了，才需要重新初始化
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId,CodeGenTypeEnum codeGenType) {
-        log.info("为 appId: {} 创建新的 AI 服务实例", appId);
         // 根据 appId 构建独立的对话记忆
+        log.info("为 appId: {} 创建新的 AI 服务实例", appId);
+        // 基于 key 为 appId 创建对话历史缓存  TODO 这里是不是创建了 Redis 的连接
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .id(appId)
                 .chatMemoryStore(redisChatMemoryStore)
-                .maxMessages(20)
+                .maxMessages(20)  // 最多缓存 20 条消息，也就是大模型上下文中仅有 20 条消息记忆
                 .build();
-        // 从数据库中加载对话历史到记忆中
+
+        // 从数据库中加载对话历史到缓存记忆中
         // 现在如果没有 AI 服务实例的隔离，可能就需要自己去区分什么时候清理对话记忆，我要把对话记忆加载到哪一个 ChatMemory 里面
-        // 初始化客户端的时候，加载对话历史到 chatMemory 中
+        // 初始化客户端的时候，加载对话历史到 chatMemory 中，也就是将对话历史添加到大模型的对话记忆中
         chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
 
         // 根据代码生成类型选择不同的模型配置
@@ -130,7 +136,7 @@ public class AiCodeGeneratorServiceFactory {
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory) // 根据不同的 appId 来提供不同的对话记忆，因为我在方法上使用了工具的上下文传参，这里必须要指定
                     .tools(new FileWriteTool()) // 注册工具
-                    // 处理工具调用幻觉问题
+                    // 处理工具调用时出现的幻觉问题
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
                     )) // 当我们的 AI 出现幻觉，调用了一个不存在的工具时怎么去处理，构造一个工具执行结果，告诉 AI 执行没有这个工具

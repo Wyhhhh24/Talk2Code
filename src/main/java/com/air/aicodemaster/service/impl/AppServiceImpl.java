@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.air.aicodemaster.constant.AppConstant;
 import com.air.aicodemaster.core.AiCodeGeneratorFacade;
+import com.air.aicodemaster.core.builder.VueProjectBuilder;
 import com.air.aicodemaster.core.handler.StreamHandlerExecutor;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
@@ -59,6 +60,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
     @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
 
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
+
 
     /**
      * 通过对话生成代码
@@ -91,11 +95,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 5. 校验通过，先添加用户消息到对话历史
         chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
 
-        // 6. 调用 AI 生成代码，其实在门面类中已经对流进行拼接已经可以将其保存到数据库了
-        //    但是为了使业务隔离开来，门面类保存拼接代码保存到文件，这里拼接是为了保存 AI 响应历史
+        // 6. 调用 AI 生成代码，其实在门面类中有对流进行拼接的操作，那里已经可以将 AI 的响应内容保存到对话历史中了
+        //    但是为了使业务隔离开来，门面类中拼接代码是将代码保存到文件中，这里拼接是为了保存 AI 响应历史，这两个业务隔离开来
         Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
 
-        // 7. 调用流处理执行器，收集AI响应内容，并在完成后记录到对话历史
+        // 7. 调用流处理执行器，收集AI响应内容，并在解析完成拼接后，记录到对话历史
+        //    生成的单/多文件的代码文件预览 和 VUE 项目的预览是不一样的，VUE项目得要 npm 一下的，分开处理
         return streamHandlerExecutor.doExecute(codeStream, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
@@ -139,7 +144,22 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
 
-        // 7. 复制文件到部署目录
+        // 7.VUE 项目特殊处理，执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        // 只有 vue 项目才做特殊处理
+        if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+            // 这个时候就不需要异步了，因为用户已经点了部署了，用户肯定是希望看到部署的结果的，和实时浏览还是不一样的
+            boolean buildSuccess = vueProjectBuilder.buildProject(sourceDirPath);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败，请重试");
+            // 检查 dist 目录是否存在
+            File distDir = new File(sourceDirPath, "dist");
+            ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "Vue 项目构建完成但未生成 dist 目录");
+            // 将 dist 目录作为部署源
+            sourceDir = distDir;
+            log.info("Vue 项目构建成功，将部署 dist 目录: {}", distDir.getAbsolutePath());
+        }
+
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
             // 进行复制，并且还支持覆盖旧的文件
@@ -148,7 +168,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
         }
 
-        // 8. 更新应用的 deployKey 和部署时间
+        // 9. 更新应用的 deployKey 和部署时间
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);

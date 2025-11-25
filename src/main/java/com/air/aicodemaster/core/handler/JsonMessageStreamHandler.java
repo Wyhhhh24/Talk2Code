@@ -1,13 +1,15 @@
 package com.air.aicodemaster.core.handler;
-
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.air.aicodemaster.ai.model.message.*;
+import com.air.aicodemaster.constant.AppConstant;
+import com.air.aicodemaster.core.builder.VueProjectBuilder;
 import com.air.aicodemaster.model.entity.User;
 import com.air.aicodemaster.model.enums.ChatHistoryMessageTypeEnum;
 import com.air.aicodemaster.service.ChatHistoryService;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -22,6 +24,9 @@ import java.util.Set;
 @Slf4j
 @Component
 public class JsonMessageStreamHandler {
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     /**
      * 处理 TokenStream（VUE_PROJECT）
@@ -38,11 +43,11 @@ public class JsonMessageStreamHandler {
                                long appId, User loginUser) {
         // 收集数据用于生成后端记忆格式
         StringBuilder chatHistoryStringBuilder = new StringBuilder();
-        // 用于跟踪已经见过的工具ID，判断是否是第一次调用
+        // 用于跟踪已经见过的工具ID，判断是否是第一次调用，有时候在调用工具的时候，它的参数是流式输出的，这种消息会有多份，我们只记录一份
         Set<String> seenToolIds = new HashSet<>();
         return originFlux
                 .map(chunk -> {
-                    // 解析每个 JSON 消息块，解析消息，{type: , data: }取出对应消息中的 data 进行拼接
+                    // 解析每个 JSON 消息块{ type: , data: }，解析消息 取出块中的 data 进行拼接，最终返回
                     return handleJsonMessageChunk(chunk, chatHistoryStringBuilder, seenToolIds);
                 })
                 .filter(StrUtil::isNotEmpty) // 过滤空字符串，防止一些无意义的信息输出，有意义的都转换为 JSON 了，不会为空字符串
@@ -50,6 +55,12 @@ public class JsonMessageStreamHandler {
                     // 流式响应完成后，添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
                     chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+
+                    // 最后将生成的代码，打包构建成 VUE 项目，可以实现浏览
+                    String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + "/" + "vue_project_" + appId;
+                    // 打包构建异步执行不阻塞主线程，假如有非常多的线程阻塞在这里打包了，假如刚好网络有问题，依赖安装不了，那不就是所有的请求都会卡在这个异步构造了，更安全稳定一些
+                    // 缺点是：不知道什么时候异步执行完成了，前端可能没有办法做到实时的更新最新网站的浏览，后续做一些调整
+                    vueProjectBuilder.buildProjectAsync(projectPath);
                 })
                 .doOnError(error -> {
                     // 如果AI回复失败，也要记录错误消息
