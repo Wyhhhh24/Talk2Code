@@ -28,6 +28,8 @@ public class VueProjectBuilder {
     public void buildProjectAsync(String projectPath) {
         // 在单独的线程中执行构建，避免阻塞主流程
         // java 21 新特性，虚拟线程，更轻量级的线程，JVM 层面的调度
+        // Java 21 的虚؜拟线程（Virtual Thread）特性，这是由 JVM 管理的轻量级线程。它的创建成本极低（几乎无内存开销），且在执行 I/O 操作时会自动‌让出 CPU 给其他虚拟线程
+        // 从而在同样的系统资源下支持百万级并发而不是传统平台线程的几千级并发。而且它的使用和传统 Java 线程几乎没有区别‍，非常适合处理这种 I/O 密集型的异步任务。
         Thread.ofVirtual()
                 .name("vue-builder-" + System.currentTimeMillis())
                 .start(() -> {

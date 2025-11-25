@@ -17,6 +17,7 @@ import java.util.List;
  */
 public interface AppService extends IService<App> {
 
+
     /**
      * App 对象转换为 AppVO
      * 查询 App 关联信息
@@ -53,4 +54,13 @@ public interface AppService extends IService<App> {
      * @param loginUser 登录用户
      */
     String deployApp(Long appId, User loginUser);
+
+
+    /**
+     * 异步生成应用截图并更新封面
+     *
+     * @param appId  应用ID
+     * @param appUrl 应用访问URL
+     */
+    void generateAppScreenshotAsync(Long appId, String appUrl);
 }

@@ -22,6 +22,7 @@ import com.air.aicodemaster.model.vo.AppVO;
 import com.air.aicodemaster.model.vo.UserVO;
 import com.air.aicodemaster.service.AppService;
 import com.air.aicodemaster.service.ChatHistoryService;
+import com.air.aicodemaster.service.ScreenshotService;
 import com.air.aicodemaster.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -63,6 +64,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
     @Resource
     private VueProjectBuilder vueProjectBuilder;
 
+    @Resource
+    private ScreenshotService screenshotService;
 
     /**
      * 通过对话生成代码
@@ -176,8 +179,40 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         boolean updateResult = this.updateById(updateApp);
         ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
 
-        // 9. 返回可访问的 URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 10. 生成可访问的 URL
+        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+
+        // 11. 异步生成截图并更新应用封面
+        generateAppScreenshotAsync(appId, appDeployUrl);
+
+        return appDeployUrl;
+    }
+
+
+    /**
+     * 异步生成应用截图并更新封面
+     *
+     * @param appId  应用ID
+     * @param appUrl 应用访问URL
+     */
+    @Override
+    public void generateAppScreenshotAsync(Long appId, String appUrl) {
+        // 使用虚拟线程异步执行
+        // Java 21 的虚؜拟线程（Virtual Thread）特性，这是由 JVM 管理的轻量级线程。它的创建成本极低（几乎无内存开销），且在执行 I/O 操作时会自动‌让出 CPU 给其他虚拟线程
+        // 从而在同样的系统资源下支持百万级并发而不是传统平台线程的几千级并发。而且它的使用和传统 Java 线程几乎没有区别‍，非常适合处理这种 I/O 密集型的异步任务
+        // 比如说，以前需要去排队买票，那假如这票是交给票务平台去调度和获取的，每次买票都得要去找票务平台去管理，那是不是其它用户找你要票你都得要去找票务平台，那就涉及到了更多的交互操作
+        // 那我们怎么样去更好的更快的去给用户提供票务服务呢？我们可以先从票务平台批发 1w 张票，所有的票都在我自己手上，也就是线程都在 JVM 的手里，然后我们就可以直接自己去管理这些票
+        // 相当于把资源放到了 JVM 来管理，不需要根操作系统再去做交互了，这样的话应用的开销消耗更小一些
+        Thread.startVirtualThread(() -> {
+            // 调用截图服务生成截图并上传
+            String screenshotUrl = screenshotService.generateAndUploadScreenshot(appUrl);
+            // 更新数据库中的应用封面字段
+            App updateApp = new App();
+            updateApp.setId(appId);
+            updateApp.setCover(screenshotUrl);
+            boolean updated = this.updateById(updateApp);
+            ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "更新应用封面字段失败");
+        });
     }
 
 
