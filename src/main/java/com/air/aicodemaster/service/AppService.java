@@ -1,5 +1,6 @@
 package com.air.aicodemaster.service;
 
+import com.air.aicodemaster.model.dto.app.AppAddRequest;
 import com.air.aicodemaster.model.dto.app.AppQueryRequest;
 import com.air.aicodemaster.model.entity.App;
 import com.air.aicodemaster.model.entity.User;
@@ -47,6 +48,11 @@ public interface AppService extends IService<App> {
      * @param loginUser 登录用户
      */
     Flux<String> chatToGenCode(Long appId, String message, User loginUser);
+
+    /**
+     * 创建应用
+     */
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 
     /**
      * 部署应用
