@@ -20,6 +20,7 @@ public interface AppConstant {
 
     /**
      * 应用生成目录  System.getProperty("user.dir") 返回当前项目所在的绝对路径
+     *                        这种：E:\Javacode\ai-code-master\tmp\code_output
      */
     String CODE_OUTPUT_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
 

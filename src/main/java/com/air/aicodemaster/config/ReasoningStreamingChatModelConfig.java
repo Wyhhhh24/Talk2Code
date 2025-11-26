@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * @author WyH524
  * @since 2025/11/23 18:49
+ * 推理流式模型配置类
  */
 @Configuration
 @ConfigurationProperties(prefix = "langchain4j.open-ai.chat-model")

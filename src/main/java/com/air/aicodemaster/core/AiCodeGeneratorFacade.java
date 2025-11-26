@@ -53,7 +53,7 @@ public class AiCodeGeneratorFacade {
      * @param appId           应用id
      */
     public Flux<String> generateAndSaveCodeStream(String userMessage, CodeGenTypeEnum codeGenTypeEnum , Long appId) {
-        // 再校验一遍
+        // 再校验一遍代码类型是否存在
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
@@ -86,7 +86,7 @@ public class AiCodeGeneratorFacade {
 
 
     /**
-     * 将 TokenStream 转换为 Flux<String>，并传递工具调用信息
+     * 将 TokenStream 转换为 Flux<String>，监听工具调用信息
      *
      * @param tokenStream TokenStream 对象
      * @return Flux<String> 流式响应

@@ -1,5 +1,4 @@
 package com.air.aicodemaster.ai;
-
 import com.air.aicodemaster.ai.model.HtmlCodeResult;
 import com.air.aicodemaster.ai.model.MultiFileCodeResult;
 import dev.langchain4j.service.MemoryId;
@@ -16,7 +15,7 @@ import reactor.core.publisher.Flux;
 public interface AiCodeGeneratorService {
 
     /**
-     * 生成 HTML 代码
+     * 生成 HTML 代码（结构化输出）
      *
      * @param userMessage 用户提示词
      * @return AI 的输出结果
@@ -29,7 +28,7 @@ public interface AiCodeGeneratorService {
 
 
     /**
-     * 生成多文件代码
+     * 生成多文件代码（结构化输出）
      *
      * @param userMessage 用户消息
      * @return 生成的代码结果

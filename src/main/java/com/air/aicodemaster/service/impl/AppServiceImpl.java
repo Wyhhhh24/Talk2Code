@@ -93,7 +93,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该应用");
         }
 
-        // 4. 获取该应用的代码生成类型
+        // 4. 获取该应用的代码生成类型，在创建应用的时候填充了
         String codeGenTypeStr = app.getCodeGenType();
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenTypeStr);
         if (codeGenTypeEnum == null) {
@@ -173,7 +173,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 5. 获取代码生成类型，构建源目录路径
         String codeGenType = app.getCodeGenType();
         String sourceDirName = codeGenType + "_" + appId;
-        // 这里是应用浏览的路径
+        // 这里是应用浏览的路径，代码所生成的路径就是这里
         String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
 
         // 6. 检查源目录是否存在
@@ -182,7 +182,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用代码不存在，请先生成代码");
         }
 
-        // 7.VUE 项目特殊处理，执行构建
+        // 7.VUE 项目特殊处理，执行构建，然后将构建好的 dist 目录复制到部署目录即可
         CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
         // 只有 vue 项目才做特殊处理
         if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {

@@ -4,7 +4,7 @@ import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
 import dev.langchain4j.service.SystemMessage;
 
 /**
- * AI代码生成类型智能路由服务
+ * AI 代码生成类型智能路由服务
  * 方法的返回值是枚举类型，框架帮我们实现结构化输出
  */
 public interface AiCodeGenTypeRoutingService {

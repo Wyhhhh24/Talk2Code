@@ -103,7 +103,7 @@ public class WebScreenshotUtils {
             FileUtil.mkdir(rootPath);
             // 图片后缀
             final String IMAGE_SUFFIX = ".png";
-            // 原始截图文件路径
+            // 原始截图文件路径，也就是初次截图，先存到这个路径下
             String imageSavePath = rootPath + File.separator + RandomUtil.randomNumbers(5) + IMAGE_SUFFIX;
             // 访问网页 TODO 共用一个 WebDriver 可能会有并发安全问题，可以使用队列，挨个取出任务来执行即可
             webDriver.get(webUrl);
@@ -114,11 +114,13 @@ public class WebScreenshotUtils {
             // 保存原始图片
             saveImage(screenshotBytes, imageSavePath);
             log.info("原始截图保存成功: {}", imageSavePath);
+
             // 压缩图片
             final String COMPRESSION_SUFFIX = "_compressed.jpg";
             String compressedImagePath = rootPath + File.separator + RandomUtil.randomNumbers(5) + COMPRESSION_SUFFIX;
             compressImage(imageSavePath, compressedImagePath);
             log.info("压缩图片保存成功: {}", compressedImagePath);
+
             // 删除原始图片，只保留压缩图片
             FileUtil.del(imageSavePath);
             return compressedImagePath;
@@ -144,8 +146,8 @@ public class WebScreenshotUtils {
 
     /**
      * 压缩图片，本地压缩
-     * originImagePath 原本的图片路径
-     * compressImagePath 想要压缩后的图片路径
+     * originImagePath 初次截图时，保存的图片路径
+     * compressImagePath 压缩后，将结果图片保存的路径
      */
     private static void compressImage(String originImagePath , String compressImagePath) {
         // 压缩图片质量（0.1 = 10% 质量） 压缩到 30% 的质量

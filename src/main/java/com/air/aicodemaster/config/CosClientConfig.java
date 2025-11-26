@@ -43,6 +43,9 @@ public class CosClientConfig {
      */
     private String bucket;
 
+    /**
+     * 初始化 COS 客户端，必注入容器成 Bean 供其它服务调用
+     */
     @Bean
     public COSClient cosClient() {
         // 初始化用户身份信息(secretId, secretKey)

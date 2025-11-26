@@ -40,7 +40,7 @@ public class AiCodeGeneratorServiceFactory {
      * 两个 StreamingChatModel 的 Bean 的话会冲突，这里修改注入的 Bean 名称为具体的即可
      * 否则框架不知道注入哪一个 Bean
      *
-     * 对话模型
+     * 流式对话模型
      */
     @Resource
     private OpenAiStreamingChatModel openAiStreamingChatModel;

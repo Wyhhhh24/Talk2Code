@@ -29,7 +29,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
         ThrowUtils.throwIf(StrUtil.isBlank(webUrl), ErrorCode.PARAMS_ERROR, "网页URL不能为空");
         log.info("开始生成网页截图，URL: {}", webUrl);
 
-        // 2. 生成本地截图，得到压缩的路径
+        // 2. 生成本地截图，返回经过压缩后的图片的路径
         String localScreenshotPath = WebScreenshotUtils.saveWebPageScreenshot(webUrl);
         ThrowUtils.throwIf(StrUtil.isBlank(localScreenshotPath), ErrorCode.OPERATION_ERROR, "本地截图生成失败");
 
@@ -62,10 +62,10 @@ public class ScreenshotServiceImpl implements ScreenshotService {
             log.error("截图文件不存在: {}", localScreenshotPath);
             return null;
         }
-        // 生成 COS 对象键，也就是保存到对应存储桶中的路径 /screenshots/2025/07/31/filename.jpg
+        // 生成 COS 对象键，也就是保存到对应存储桶中的路径 /screenshots/2025/07/31/123478237492_compressed.jpg
         String fileName = UUID.randomUUID().toString().substring(0, 8) + "_compressed.jpg";
         String cosKey = generateScreenshotKey(fileName);
-        // 上传
+        // 上传，得到可访问的图片 URL
         return cosManager.uploadFile(cosKey, screenshotFile);
     }
 

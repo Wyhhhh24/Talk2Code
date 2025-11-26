@@ -33,7 +33,7 @@ public class RedisChatMemoryStoreConfig {
         return RedisChatMemoryStore.builder()
                 .host(host)
                 .port(port)
-                .user("default") // 如果密码不为空，这里的配置一定要加上 user 配置，默认就是 default 去写一下
+                .user("default") // 如果密码不为空，这里的配置一定要加上 user 配置，默认就是 default 去写一下， LangChain4j 整合 Redis 需要这样配置否则报错
                 .password(password)   // 但是如果密码为空，加了 user 配置反而会报错
                 .ttl(ttl)  // 键的存活时间
                 .build();
