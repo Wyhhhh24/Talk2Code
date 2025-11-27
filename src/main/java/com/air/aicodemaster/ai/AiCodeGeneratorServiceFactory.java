@@ -1,6 +1,6 @@
 package com.air.aicodemaster.ai;
 
-import com.air.aicodemaster.ai.tools.FileWriteTool;
+import com.air.aicodemaster.ai.tools.*;
 import com.air.aicodemaster.exception.BusinessException;
 import com.air.aicodemaster.exception.ErrorCode;
 import com.air.aicodemaster.model.enums.CodeGenTypeEnum;
@@ -63,6 +63,14 @@ public class AiCodeGeneratorServiceFactory {
      */
     @Resource
     private ChatHistoryService chatHistoryService;
+
+
+    /**
+     * 工具管理器
+     */
+    @Resource
+    private ToolManager toolManager;
+
 
     /**
      * 通过 AI Service 工厂为每一个 appId 单独构建会话记忆，并且单独提供 AI 服务，这样每个 AI 服务只为 appId 提供特定功能，
@@ -135,7 +143,7 @@ public class AiCodeGeneratorServiceFactory {
             case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemoryProvider(memoryId -> chatMemory) // 根据不同的 appId 来提供不同的对话记忆，因为我在方法上使用了工具的上下文传参，这里必须要指定
-                    .tools(new FileWriteTool()) // 注册工具
+                    .tools(toolManager.getAllTools())
                     // 处理工具调用时出现的幻觉问题
                     .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(
                             toolExecutionRequest, "Error: there is no tool called " + toolExecutionRequest.name()
