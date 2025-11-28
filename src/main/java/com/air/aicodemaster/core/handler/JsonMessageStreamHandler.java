@@ -111,9 +111,10 @@ public class JsonMessageStreamHandler {
                 if (toolId != null && !seenToolIds.contains(toolId)) {
                     // 第一次调用这个工具，记录 ID 并返回工具信息
                     seenToolIds.add(toolId);
+                    // 我们注册了多个工具，所以基于这个工具名称，通过工具管理类获取对应的工具实例
                     // 根据工具名称获取工具实例
                     BaseTool tool = toolManager.getTool(toolName);
-                    // 返回格式化的工具调用信息
+                    // 返回格式化的工具调用信息，也就是拼接好工具名称的字符串  String.format("\n\n[选择工具] %s\n\n", getDisplayName());
                     return tool.generateToolRequestResponse();
                 } else {
                     // 不是第一次调用这个工具，直接返回空
@@ -123,11 +124,14 @@ public class JsonMessageStreamHandler {
             case TOOL_EXECUTED -> {
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
                 String toolName = toolExecutedMessage.getName();
+                // 获取工具调用时传的完整参数
                 JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
-                // 根据工具名称获取工具实例并生成相应的结果格式
+                // 我们注册了多个工具，所以基于这个工具名称，通过工具管理类获取对应的工具实例
+                // 根据工具名称获取工具实例
                 BaseTool tool = toolManager.getTool(toolName);
+                // 基于工具调用时传的完整参数，拼接返回的字符串结果
                 String result = tool.generateToolExecutedResult(jsonObject);
-                // 输出前端和要持久化的内容
+                // String.format("[工具调用] %s %s", getDisplayName(), relativeFilePath) ，将工具名称和操作的路径拼接，进行输出前端和持久化的内容
                 String output = String.format("\n\n%s\n\n", result);
                 chatHistoryStringBuilder.append(output);
                 return output;

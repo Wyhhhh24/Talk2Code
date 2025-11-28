@@ -22,18 +22,19 @@ public class ToolManager {
     private final Map<String, BaseTool> toolMap = new HashMap<>();
 
     /**
-     * 自动注入所有工具
+     * 自动注入所有工具，实现了 BaseTool 接口的工具都会在这个数组集合中
      */
     @Resource
     private BaseTool[] tools;
 
     /**
-     * 初始化工具映射
+     * Bean 加载的时候，初始化工具映射
      */
     @PostConstruct
     public void initTools() {
         for (BaseTool tool : tools) {
             toolMap.put(tool.getToolName(), tool);
+            //                                工具英文名            工具中文名
             log.info("注册工具: {} -> {}", tool.getToolName(), tool.getDisplayName());
         }
         log.info("工具管理器初始化完成，共注册 {} 个工具", toolMap.size());

@@ -26,15 +26,19 @@ public class FileReadTool extends BaseTool{
             @ToolMemoryId Long appId
     ) {
         try {
+            // 构建 Path 对象
             Path path = Paths.get(relativeFilePath);
+            // 基于相对路径构建绝对路径
             if (!path.isAbsolute()) {
                 String projectDirName = "vue_project_" + appId;
                 Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
                 path = projectRoot.resolve(relativeFilePath);
             }
+            // 对该文件进行基本判断
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
                 return "错误：文件不存在或不是文件 - " + relativeFilePath;
             }
+            // 读取该路径下的这个文件，读取为一个字符串
             return Files.readString(path);
         } catch (IOException e) {
             String errorMessage = "读取文件失败: " + relativeFilePath + ", 错误: " + e.getMessage();

@@ -25,27 +25,35 @@ public class FileDeleteTool extends BaseTool{
             @ToolMemoryId Long appId
     ) {
         try {
+            // 基于这个相对路径创建出 Path 对象
             Path path = Paths.get(relativeFilePath);
+            // 如果不是绝对路径，基于这个相对路径构建出绝对路径
             if (!path.isAbsolute()) {
                 String projectDirName = "vue_project_" + appId;
                 Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
+                // 将 path 设置为 绝对路径
                 path = projectRoot.resolve(relativeFilePath);
             }
+            // 路径的基本校验
             if (!Files.exists(path)) {
                 return "警告：文件不存在，无需删除 - " + relativeFilePath;
             }
             if (!Files.isRegularFile(path)) {
                 return "错误：指定路径不是文件，无法删除 - " + relativeFilePath;
             }
-            // 安全检查：避免删除重要文件
+
+            // 安全检查：获取文件名，进行判断是否在重要的文件集合中，避免删除重要文件
             String fileName = path.getFileName().toString();
             if (isImportantFile(fileName)) {
                 return "错误：不允许删除重要文件 - " + fileName;
             }
+
+            // 可以执行删除操作
             Files.delete(path);
             log.info("成功删除文件: {}", path.toAbsolutePath());
             return "文件删除成功: " + relativeFilePath;
         } catch (IOException e) {
+            // 删除失败把错误信息提供给 AI
             String errorMessage = "删除文件失败: " + relativeFilePath + ", 错误: " + e.getMessage();
             log.error(errorMessage, e);
             return errorMessage;
@@ -56,6 +64,8 @@ public class FileDeleteTool extends BaseTool{
      * 判断是否是重要文件，不允许删除
      */
     private boolean isImportantFile(String fileName) {
+        // 定义了一些不能让 AI 删除的文件，删除文件时需要判断该文件是否存在里面
+        // 文件保存工具是支持文件重写的，是不需要删除的
         String[] importantFiles = {
                 "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
                 "vite.config.js", "vite.config.ts", "vue.config.js",
