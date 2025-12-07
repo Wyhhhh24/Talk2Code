@@ -42,18 +42,18 @@
   - 构建优化：Vue 项目自动执行 npm 构建，生成生产版本。
 
 ## 技术栈
-<img align="center" src="https://skillicons.dev/icons?i=java,spring&theme=light" />
+<img align="center" src="https://skillicons.dev/icons?i=java,spring,redis,mysql,vue,js,html,css,maven&theme=light" />
 本项目主要使用 Java 开发，结合现代技术栈，确保性能与扩展性。
 
 ## 安装与使用
 
-1. 克隆项目：`git clone https://github.com/Wyhh24/TuxiCloud.git`
-2. 进入项目目录：`cd TuxiCloud`
+1. 克隆项目：`git clone https://github.com/Wyhhhh24/Talk2Code.git`
+2. 进入项目目录：`cd Talk2Code`
 3. 安装依赖并运行（具体步骤请根据项目配置调整）。
 
 ## 贡献
 
-欢迎提交 issue 或 pull request！让我们一起打造更强大的 TuxiCloud。
+欢迎提交 issue 或 pull request！让我们一起打造更强大的 Talk2Code。
 
 ## 联系我们
 
@@ -61,4 +61,4 @@
 
 ---
 
-**TuxiCloud - 你的图片协作新选择！**
+**Talk2Code - 你的零代码应用生成平台！**
